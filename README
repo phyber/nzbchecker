@@ -1,2 +1,6 @@
 Python script to check article completion on an NNTP server.
+
+If you're using Python < 2.7 you will probably need to install python-argparse
+from your distros package repository. argparse is standard in 2.7+.
+
 Works for me, YMMV.
