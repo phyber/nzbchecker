@@ -1,1 +1,2 @@
 Optionally read configuration from a config file.
+Make it threaded so checking can be faster.
