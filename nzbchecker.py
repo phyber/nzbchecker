@@ -138,10 +138,12 @@ class NZBHandler(async_chat_ssl):
 		self.authed = False
 		self.curgrp = None
 		self.working = None
+		self.finished = False
 		self.segiter = None
 		self.groupiter = None
 		self.groupname = None
 
+	# NNTP commands that we need to send
 	def group(self, groupname):
 		"""
 		Change to a new newsgroup
@@ -171,6 +173,73 @@ class NZBHandler(async_chat_ssl):
 		self.working = True
 		self.push("QUIT")
 
+	# Methods for handling NNTP responses
+	# DATE response.
+	def response_111(self):
+		self.working = False
+
+	# Welcome banner. We send our username.
+	def response_200(self):
+		if self.conf.username:
+			self.push("AUTHINFO USER %s" % self.conf.username)
+
+	# Disconnecting.
+	def response_205(self):
+		if debug: print "205: Disconnecting."
+		self.close()
+		self.finished = True
+
+	# Group switched successfully.
+	def response_211(self):
+		if debug: print "211: Group switched."
+		self.curgrp = self.changed
+		self.working = False
+
+	# Article exists
+	def response_223(self):
+		if debug: print "223: Article exists."
+		self.working = False
+
+	# Authenticated successfully.
+	def response_281(self):
+		if debug: print "281: Authentication successful."
+		self.authed = True
+
+	# Request for further authentication, send password.
+	def response_381(self):
+		self.push("AUTHINFO PASS %s" % self.conf.password)
+
+	# Non-existant group
+	def response_411(self):
+		if debug: print "411: Group does not exist."
+		self.working = False
+
+	# No such article number in this group
+	def response_423(self):
+		if debug: print "423: No such article in this group."
+		self.working = False
+		self.nzbdata["missingArticles"] = self.nzbdata["missingArticles"] + 1
+
+	# No such article found
+	def response_430(self):
+		if debug: print "430: No such article found."
+		self.working = False
+		self.nzbdata["missingArticles"] = self.nzbdata["missingArticles"] + 1
+
+	# Authentication failed. We'll quit if we hit this.
+	def response_452(self):
+		if debug: print "452: Authentication failed."
+		self.working = False
+		self.quit()
+
+	# Command not recognised. We'll quit if we hit this.
+	def response_500(self):
+		if debug: print "500: Command not recognised."
+		if debug: print "Command was: '%s'." % self.lastcommand
+		self.working = False
+		self.quit()
+
+	# Buffer incoming data until we get the terminator
 	def collect_incoming_data(self, data):
 		"""
 		Buffer the incoming data.
@@ -183,60 +252,17 @@ class NZBHandler(async_chat_ssl):
 		"""
 		if debug: print self.data
 		nntpcode = self.data[0:3]
-		# Authentication.
-		if not self.authed:
-			# Welcome banner.
-			if nntpcode == "200":
-				if self.conf.username:
-					self.push("AUTHINFO USER %s" % self.conf.username)
 
-			# Password request
-			if nntpcode == "381":
-				self.push("AUTHINFO PASS %s" % self.conf.password)
-
-			# Authenticated.
-			if nntpcode == "281":
-				self.authed = True
-
-		# Respond to the DATE command we're using as a NOOP
-		if nntpcode == "111":
-			self.working = False
-
-		# Group switched successfully.
-		if nntpcode == "211":
-			if debug: print "211: Group switched"
-			self.curgrp = self.changed
-			self.working = False
-
-		# Article exists.
-		if nntpcode == "223":
-			if debug: print "223: Article exists."
-			self.working = False
-
-		# Non-existant group
-		if nntpcode == "411":
-			if debug: print "411: Group does not exist."
-			self.working = False
-
-		# Article does not exist
-		if nntpcode in ("423", "430"):
-			if debug: print "%s: Article does not exist." % (nntpcode)
-			self.working = False
-			self.nzbdata["missingArticles"] = self.nzbdata["missingArticles"] + 1
-
-		# Authentication failed.
-		if nntpcode == "452":
-			if debug: print "430: Authentication failed."
+		# Call the appropriate method
+		method_name = 'response_' + str(nntpcode)
+		method = getattr(self, method_name)
+		if method:
+			method()
+		else:
+			print "Handler not found for response '%s'. Quitting."
 			self.quit()
 
-		# Command failed.
-		if nntpcode == "500":
-			if debug: print "500: Command not recognised."
-
-		# Disconnecting.
-		if nntpcode == "205":
-			if debug: print "205: Disconnecting"
-			self.close()
+		if self.finished:
 			return
 
 		# OK, here we actually do the work of switching groups and checking articles.
@@ -351,6 +377,6 @@ if __name__ == '__main__':
 	print "===================="
 	print "Totals"
 	print "\tMissing Articles: %s" % (nzbhandler.nzbdata["missingArticles"])
-	print "\tCompletion: %s%%" % (((nzbhandler.nzbdata["totalArticles"] - nzbhandler.nzbdata["missingArticles"]) / nzbhandler.nzbdata["totalArticles"]) * 100)
+	print "\tCompletion: %.2f%%" % (((nzbhandler.nzbdata["totalArticles"] - nzbhandler.nzbdata["missingArticles"]) / nzbhandler.nzbdata["totalArticles"]) * 100)
 	print ""
 	print "All done!"
