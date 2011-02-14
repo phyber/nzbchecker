@@ -259,7 +259,7 @@ class NZBHandler(async_chat_ssl):
 		if method:
 			method()
 		else:
-			print "Handler not found for response '%s'. Quitting."
+			print "Handler not found for response '%s'. Quitting." % nntpcode
 			self.quit()
 
 		if self.finished:
