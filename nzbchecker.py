@@ -254,10 +254,9 @@ class NZBHandler(async_chat_ssl):
 		nntpcode = self.data[0:3]
 
 		# Call the appropriate method
-		method_name = 'response_' + str(nntpcode)
-		method = getattr(self, method_name)
-		if method:
-			method()
+		m = 'response_' + str(nntpcode)
+		if hasattr(self, m):
+			getattr(self, m)()
 		else:
 			print "Handler not found for response '%s'. Quitting." % nntpcode
 			self.quit()
