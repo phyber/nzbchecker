@@ -1,4 +1,5 @@
 #!/usr/bin/python
+from setproctitle import setproctitle
 import xml.parsers.expat
 import asyncore
 import asynchat
@@ -239,6 +240,12 @@ class NZBHandler(async_chat_ssl):
 		self.working = False
 		self.quit()
 
+	# Access restriction/permission denied
+	def response_502(self):
+		if debug: print "502: Access restriction."
+		self.working = False
+		sqlf.quit()
+
 	# Buffer incoming data until we get the terminator
 	def collect_incoming_data(self, data):
 		"""
@@ -353,6 +360,7 @@ def getopts():
 	return argparser.parse_args()
 
 if __name__ == '__main__':
+	setproctitle(sys.argv[0])
 	conf = getopts()
 	if conf.debug:
 		debug = True
