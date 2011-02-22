@@ -244,7 +244,7 @@ class NZBHandler(async_chat_ssl):
 	def response_502(self):
 		if debug: print "502: Access restriction."
 		self.working = False
-		sqlf.quit()
+		self.quit()
 
 	# Buffer incoming data until we get the terminator
 	def collect_incoming_data(self, data):
