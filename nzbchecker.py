@@ -1,12 +1,10 @@
 #!/usr/bin/python
 from setproctitle import setproctitle
-import xml.parsers.expat
+from pynzb import nzb_parser
 import asyncore
 import asynchat
 import argparse
 import socket
-import errno
-import time
 import ssl
 import sys
 import re
@@ -21,58 +19,12 @@ class NZBParser():
 	huge arrays of things we probably don't need.
 	"""
 	def __init__(self):
-		self.parser = xml.parsers.expat.ParserCreate()
-		self.parser.StartElementHandler = self.start_element
-		self.parser.EndElementHandler = self.end_element
-		self.parser.CharacterDataHandler = self.char_data
-		self.pattern = re.compile(r' "(.*)" yEnc ')
-		# Storage of results.
-		self.results = dict()
-		self.results["totalFiles"] = 0
-		self.results["totalBytes"] = 0
-		self.results["totalArticles"] = 0
-		self.results["missingArticles"] = 0
-		self.results["files"] = dict()
-
-	def start_element(self, name, attrs):
-		"""
-		Beginning of XML element.
-		"""
-		if debug: print "Element: '%s'" % (name)
-		if debug: print "\tAttrs: %s" % (attrs)
-		self.current_data = ''
-		if name == "file":
-			self.results["totalFiles"] = self.results["totalFiles"] + 1
-			# Extract the filename, make new entries for it in the results.
-			# We really don't need filenames.
-			self.curFile = str(self.pattern.search(attrs["subject"]).groups())
-			self.results["files"][self.curFile] = dict()
-			self.results["files"][self.curFile]["groups"] = list()
-			self.results["files"][self.curFile]["segments"] = list()
-		if name == "segment":
-			self.results["totalBytes"] = self.results["totalBytes"] + int(attrs["bytes"])
-			self.results["totalArticles"] = self.results["totalArticles"] + 1
-
-	def end_element(self, name):
-		"""
-		End of XML element
-		"""
-		if debug: print "Ended element: '%s'" % (name)
-		if name == "file":
-			return
-		if name == "segment":
-			if debug: print "Added segment: "+self.current_data
-			self.current_data.strip()
-			self.results["files"][self.curFile]["segments"].append(str(self.current_data))
-		if name == "group":
-			self.current_data.strip()
-			self.results["files"][self.curFile]["groups"].append(str(self.current_data))
-
-	def char_data(self, data):
-		"""
-		Buffer the XML data until the end of the element.
-		"""
-		self.current_data = self.current_data + data
+		self.results = {
+			"totalBytes" : 0,
+			"totalFiles" : 0,
+			"totalArticles" : 0,
+			"nzbdata" : None,
+		}
 
 	def parse(self, filename):
 		"""
@@ -84,17 +36,16 @@ class NZBParser():
 			print "ERROR: Could not open NZB file '%s'" % (filename)
 			sys.exit(1)
 
-		self.fh = fh
-		self.parser.ParseFile(fh)
-		# Build an easily iterable dict/array from the stuff we took out of the nzb
-		self.results["groups"] = dict()
-		for filename in self.results["files"]:
-			for group in self.results["files"][filename]["groups"]:
-				if not group in self.results["groups"]:
-					self.results["groups"][group] = list()
-				self.results["groups"][group].extend(self.results["files"][filename]["segments"])
+		nzbxml = fh.read()
 		fh.close()
 
+		nzbdata = nzb_parser.parse(nzbxml)
+		for nzb in nzbdata:
+			self.results["totalFiles"] += 1
+			for segment in nzb.segments:
+				self.results["totalArticles"] += 1
+				self.results["totalBytes"] += segment.bytes
+		self.results["nzbdata"] = nzbdata
 		return self.results
 
 class async_chat_ssl(asynchat.async_chat):
@@ -134,14 +85,15 @@ class NZBHandler(async_chat_ssl):
 		self.data = ""
 		# Config
 		self.conf = config
-		self.nzbdata = nzbdata
+		self.nzbdata = nzbdata["nzbdata"]
+		self.remaining = nzbdata["totalArticles"]
+		self.totalArticles = nzbdata["totalArticles"]
+		self.missing = 0
 		# Status
 		self.authed = False
 		self.curgrp = None
 		self.working = None
 		self.finished = False
-		self.segiter = None
-		self.groupiter = None
 		self.groupname = None
 
 	# NNTP commands that we need to send
@@ -219,13 +171,13 @@ class NZBHandler(async_chat_ssl):
 	def response_423(self):
 		if debug: print "423: No such article in this group."
 		self.working = False
-		self.nzbdata["missingArticles"] = self.nzbdata["missingArticles"] + 1
+		self.missing += 1
 
 	# No such article found
 	def response_430(self):
 		if debug: print "430: No such article found."
 		self.working = False
-		self.nzbdata["missingArticles"] = self.nzbdata["missingArticles"] + 1
+		self.missing += 1
 
 	# Authentication failed. We'll quit if we hit this.
 	def response_452(self):
@@ -246,12 +198,24 @@ class NZBHandler(async_chat_ssl):
 		self.working = False
 		self.quit()
 
+	# Get the next message_id from the nzbdata
+	def get_message_id(self):
+		message_id = None
+		if len(self.nzbdata[0].segments) > 0:
+			segment = self.nzbdata[0].segments.pop()
+			self.groupname = self.nzbdata[0].groups[0]
+			message_id = segment.message_id
+		else:
+			self.nzbdata.pop(0)
+			self.groupname = None
+			message_id = ""
+
 	# Buffer incoming data until we get the terminator
 	def collect_incoming_data(self, data):
 		"""
 		Buffer the incoming data.
 		"""
-		self.data = self.data + data
+		self.data += data
 
 	def found_terminator(self):
 		"""
@@ -271,29 +235,30 @@ class NZBHandler(async_chat_ssl):
 		if self.finished:
 			return
 
+		if len(self.nzbdata) == 0:
+			self.quit()
 		# OK, here we actually do the work of switching groups and checking articles.
 		if self.authed and not self.working:
-			if not self.groupiter:
-				self.groupiter = self.nzbdata["groups"].__iter__()
-			if not self.groupname:
-				try:
-					self.groupname = self.groupiter.next()
-				except StopIteration:
-					self.groupname = None
-					self.quit()
-			if self.groupname == self.curgrp:
-				if not self.segiter:
-					self.segiter = self.nzbdata["groups"][self.groupname].__iter__()
-				try:
-					segment = self.segiter.next()
-				except StopIteration:
-					self.groupname = None
-					segment = None
-					self.noop()
-				if segment:
-					self.stat(segment)
-			elif self.groupname != None:
-				self.group(self.groupname)
+			message_id = None
+			if len(self.nzbdata[0].segments) > 0:
+				segment = self.nzbdata[0].segments.pop()
+				self.groupname = self.nzbdata[0].groups[0]
+				message_id = segment.message_id
+			else:
+				self.nzbdata.pop(0)
+				self.noop()
+				self.groupname = None
+
+			if message_id:
+				msg = "Remaining: %s" % (self.remaining)
+				if debug:
+					print msg
+				else:
+					print " " * (len(msg) + 1),
+					print "\r%s" % (msg),
+					sys.stdout.flush()
+				self.stat(message_id)
+				self.remaining -= 1
 
 		# Clear out the data ready for the next run
 		self.data = ""
@@ -359,6 +324,27 @@ def getopts():
 
 	return argparser.parse_args()
 
+def pretty_size(size, real=True):
+	suffixes = {
+		1000: [
+			'KB', 'MB', 'GB',
+			'TB', 'PB', 'EB',
+			'ZB', 'YB'
+		],
+		1024: [
+			'KiB', 'MiB', 'GiB',
+			'TiB', 'PiB', 'EiB',
+			'ZiB', 'YiB'
+		],
+	}
+
+	multiple = 1024 if real else 1000
+
+	for suffix in suffixes[multiple]:
+		size /= multiple
+		if size < multiple:
+			return '{0:.1f} {1}'.format(size, suffix)
+
 if __name__ == '__main__':
 	setproctitle(sys.argv[0])
 	conf = getopts()
@@ -372,18 +358,18 @@ if __name__ == '__main__':
 	print "Totals"
 	print "\tFiles: %s" % (results["totalFiles"])
 	print "\tArticles: %s" % (results["totalArticles"])
-	print "\tArticle Bytes: %s" % (results["totalBytes"])
+	print "\tArticle Size: %s" % (pretty_size(results["totalBytes"]))
 	print ""
 	
 	print "Be patient, this might take a while :)"
 	nzbhandler = NZBHandler(conf, results)
 	nzbhandler.run(conf.server, conf.port, conf.ssl)
-	
-	print ""
+
+	print "\n"
 	print "NZB Checking Results"
 	print "===================="
 	print "Totals"
-	print "\tMissing Articles: %s" % (nzbhandler.nzbdata["missingArticles"])
-	print "\tCompletion: %.2f%%" % (((nzbhandler.nzbdata["totalArticles"] - nzbhandler.nzbdata["missingArticles"]) / nzbhandler.nzbdata["totalArticles"]) * 100)
+	print "\tMissing Articles: %s" % (nzbhandler.missing)
+	print "\tCompletion: %.2f%%" % (100 - (nzbhandler.missing / float(nzbhandler.totalArticles) * 100))
 	print ""
 	print "All done!"

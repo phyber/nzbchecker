@@ -1,7 +1,7 @@
 Python script to check article completion on an NNTP server.
 
-You'll need to install the argparse module to use this. Either install it from
-your distros packaging system, or install it with easy_install.
-$ easy_install --user argparse
+You'll need to install the argparse and pynzb modules to use this. If they
+aren't in your distro's packaging system you can install them with either 'pip'
+or 'easy_install'.
 
 Works for me, YMMV.
