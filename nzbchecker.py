@@ -34,7 +34,7 @@ class NZBParser():
         try:
             fh = open(filename)
         except:
-            print "ERROR: Could not open NZB file '%s'" % (filename)
+            print("ERROR: Could not open NZB file '%s'".format(filename))
             sys.exit(1)
 
         nzbxml = fh.read()
@@ -77,7 +77,7 @@ class async_chat_ssl(asynchat.async_chat):
         out what we're pushing in debug mode.
         """
         if debug:
-            print data
+            print(data)
         asynchat.async_chat.push(self, data + "\r\n")
 
 
@@ -143,27 +143,27 @@ class NZBHandler(async_chat_ssl):
     # Disconnecting.
     def response_205(self):
         if debug:
-            print "205: Disconnecting."
+            print("205: Disconnecting.")
         self.close()
         self.finished = True
 
     # Group switched successfully.
     def response_211(self):
         if debug:
-            print "211: Group switched."
+            print("211: Group switched.")
         self.curgrp = self.changed
         self.working = False
 
     # Article exists
     def response_223(self):
         if debug:
-            print "223: Article exists."
+            print("223: Article exists.")
         self.working = False
 
     # Authenticated successfully.
     def response_281(self):
         if debug:
-            print "281: Authentication successful."
+            print("281: Authentication successful.")
         self.authed = True
 
     # Request for further authentication, send password.
@@ -173,43 +173,43 @@ class NZBHandler(async_chat_ssl):
     # Non-existant group
     def response_411(self):
         if debug:
-            print "411: Group does not exist."
+            print("411: Group does not exist.")
         self.working = False
 
     # No such article number in this group
     def response_423(self):
         if debug:
-            print "423: No such article in this group."
+            print("423: No such article in this group.")
         self.working = False
         self.missing += 1
 
     # No such article found
     def response_430(self):
         if debug:
-            print "430: No such article found."
+            print("430: No such article found.")
         self.working = False
         self.missing += 1
 
     # Authentication failed. We'll quit if we hit this.
     def response_452(self):
         if debug:
-            print "452: Authentication failed."
+            print("452: Authentication failed.")
         self.working = False
         self.quit()
 
     # Command not recognised. We'll quit if we hit this.
     def response_500(self):
         if debug:
-            print "500: Command not recognised."
+            print("500: Command not recognised.")
         if debug:
-            print "Command was: '%s'." % self.lastcommand
+            print("Command was: '%s'.".format(self.lastcommand))
         self.working = False
         self.quit()
 
     # Access restriction/permission denied
     def response_502(self):
         if debug:
-            print "502: Access restriction."
+            print("502: Access restriction.")
         self.working = False
         self.quit()
 
@@ -245,7 +245,8 @@ class NZBHandler(async_chat_ssl):
         if hasattr(self, m):
             getattr(self, m)()
         else:
-            print "Handler not found for response '%s'. Quitting." % nntpcode
+            print("Handler not found for response '%s'."
+                  + " Quitting.".format(nntpcode))
             self.quit()
 
         if self.finished:
@@ -267,12 +268,12 @@ class NZBHandler(async_chat_ssl):
                 self.groupname = None
 
             if message_id:
-                msg = "Remaining: %s" % (self.remaining)
+                msg = "Remaining: %s".format(self.remaining)
                 if debug:
                     print msg
                 else:
-                    print " " * (len(msg) + 1),
-                    print "\r%s" % (msg),
+                    print(" " * (len(msg) + 1)),
+                    print("\r%s".format(msg)),
                     sys.stdout.flush()
                 self.stat(message_id)
                 self.remaining -= 1
@@ -337,7 +338,7 @@ def getopts():
     argparser.add_argument(
         '-v', '--version',
         action='version',
-        version='%(prog)s v' + str(VERSION),
+        version='%(prog)s v%s'.format(str(VERSION)),
         help="Show version information.",
     )
 
@@ -376,9 +377,9 @@ if __name__ == '__main__':
     print("NZB Parsing Results")
     print("===================")
     print("Totals")
-    print("\tFiles: %s" % (results["totalFiles"]))
-    print("\tArticles: %s" % (results["totalArticles"]))
-    print("\tArticle Size: %s" % (pretty_size(results["totalBytes"])))
+    print("\tFiles: %s".format(results["totalFiles"]))
+    print("\tArticles: %s".format(results["totalArticles"]))
+    print("\tArticle Size: %s".format(pretty_size(results["totalBytes"])))
     print("")
 
     print("Be patient, this might take a while :)")
@@ -389,7 +390,7 @@ if __name__ == '__main__':
     print("NZB Checking Results")
     print("====================")
     print("Totals")
-    print("\tMissing Articles: %s" % (nzbhandler.missing))
+    print("\tMissing Articles: %s".format(nzbhandler.missing))
     print("\tCompletion: %.2f%%".format((100 - (nzbhandler.missing /
                                                 float(nzbhandler.totalArticles)
                                                 * 100))))
