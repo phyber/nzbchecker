@@ -288,6 +288,10 @@ class NZBHandler(async_chat_ssl):
         # Clear out the data ready for the next run
         self.data = ""
 
+    def completion(self):
+        presentArticles = self.totalArticles - self.missing
+        return 100 * float(presentArticles) / float(self.totalArticles)
+
     def run(self, host, port, sslmode):
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.connect((host, port), use_ssl=sslmode)
@@ -399,9 +403,7 @@ if __name__ == '__main__':
     print("====================")
     print("Totals")
     print("\tMissing Articles: {missing}".format(missing=nzbhandler.missing))
-    print("\tCompletion: {percent:.2f}".format(
-        percent=(100 - (nzbhandler.missing /
-                        float(nzbhandler.totalArticles) * 100)))
-    )
+    print("\tCompletion: {percent:.2f}%".format(
+        percent=nzbhandler.completion()))
     print("")
     print("All done!")
