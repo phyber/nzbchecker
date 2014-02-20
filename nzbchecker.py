@@ -241,12 +241,12 @@ class NZBHandler(async_chat_ssl):
         nntpcode = self.data[0:3]
 
         # Call the appropriate method
-        m = 'response_' + str(nntpcode)
+        m = 'response_{}'.format(str(nntpcode))
         if hasattr(self, m):
             getattr(self, m)()
         else:
             print("Handler not found for response '{}'."
-                  + " Quitting.".format(nntpcode))
+                  " Quitting.".format(nntpcode))
             self.quit()
 
         if self.finished:
@@ -273,7 +273,7 @@ class NZBHandler(async_chat_ssl):
                     print msg
                 else:
                     print(" " * (len(msg) + 1)),
-                    print("\r%s".format(msg)),
+                    print("\r{}".format(msg)),
                     sys.stdout.flush()
                 self.stat(message_id)
                 self.remaining -= 1
@@ -291,7 +291,7 @@ def getopts():
     argparser = argparse.ArgumentParser(
         description="Check article completion on an NNTP server",
         epilog="Note: The checking may take a while to complete, "
-        + "depending on the number of articles."
+        "depending on the number of articles."
     )
     argparser.add_argument(
         '-s', '--server',
