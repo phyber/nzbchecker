@@ -12,6 +12,7 @@ import re
 debug = False
 VERSION = 0.1
 
+NNTP_TERMINATOR="\r\n"
 
 class NZBParser():
     """
@@ -79,14 +80,17 @@ class async_chat_ssl(asynchat.async_chat):
         """
         if debug:
             print(data)
-        asynchat.async_chat.push(self, "{data}\r\n".format(data=data))
+        asynchat.async_chat.push(self, "{data}{terminator}".format(
+            data=data,
+            terminator=asynchat.async_chat.get_terminator()
+        ))
 
 
 class NZBHandler(async_chat_ssl):
     def __init__(self, config, nzbdata):
         # asynchat
         asynchat.async_chat.__init__(self)
-        self.set_terminator("\r\n")
+        self.set_terminator(NNTP_TERMINATOR)
         self.data = ""
         # Config
         self.conf = config
