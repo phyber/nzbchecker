@@ -34,7 +34,7 @@ class NZBParser():
         try:
             fh = open(filename)
         except:
-            print("ERROR: Could not open NZB file '%s'".format(filename))
+            print("ERROR: Could not open NZB file '{}'".format(filename))
             sys.exit(1)
 
         nzbxml = fh.read()
@@ -78,7 +78,7 @@ class async_chat_ssl(asynchat.async_chat):
         """
         if debug:
             print(data)
-        asynchat.async_chat.push(self, data + "\r\n")
+        asynchat.async_chat.push(self, "{data}\r\n".format(data=data))
 
 
 class NZBHandler(async_chat_ssl):
@@ -106,7 +106,7 @@ class NZBHandler(async_chat_ssl):
         Change to a new newsgroup
         """
         self.working = True
-        self.push("GROUP " + groupname)
+        self.push("GROUP {}".format(groupname))
         self.changed = groupname
 
     def noop(self):
@@ -121,7 +121,7 @@ class NZBHandler(async_chat_ssl):
         STAT an article in the active newsgroup
         """
         self.working = True
-        self.push("STAT <" + article + ">")
+        self.push("STAT <{article}>".format(article=article))
 
     def quit(self):
         """
@@ -138,7 +138,7 @@ class NZBHandler(async_chat_ssl):
     # Welcome banner. We send our username.
     def response_200(self):
         if self.conf.username:
-            self.push("AUTHINFO USER %s" % self.conf.username)
+            self.push("AUTHINFO USER {}".format(self.conf.username))
 
     # Disconnecting.
     def response_205(self):
@@ -168,7 +168,7 @@ class NZBHandler(async_chat_ssl):
 
     # Request for further authentication, send password.
     def response_381(self):
-        self.push("AUTHINFO PASS %s" % self.conf.password)
+        self.push("AUTHINFO PASS {}".format(self.conf.password))
 
     # Non-existant group
     def response_411(self):
@@ -202,7 +202,7 @@ class NZBHandler(async_chat_ssl):
         if debug:
             print("500: Command not recognised.")
         if debug:
-            print("Command was: '%s'.".format(self.lastcommand))
+            print("Command was: '{}'.".format(self.lastcommand))
         self.working = False
         self.quit()
 
@@ -245,7 +245,7 @@ class NZBHandler(async_chat_ssl):
         if hasattr(self, m):
             getattr(self, m)()
         else:
-            print("Handler not found for response '%s'."
+            print("Handler not found for response '{}'."
                   + " Quitting.".format(nntpcode))
             self.quit()
 
@@ -268,7 +268,7 @@ class NZBHandler(async_chat_ssl):
                 self.groupname = None
 
             if message_id:
-                msg = "Remaining: %s".format(self.remaining)
+                msg = "Remaining: {}".format(self.remaining)
                 if debug:
                     print msg
                 else:
@@ -338,7 +338,7 @@ def getopts():
     argparser.add_argument(
         '-v', '--version',
         action='version',
-        version='%(prog)s v%s'.format(str(VERSION)),
+        version='%(prog)s v{}'.format(str(VERSION)),
         help="Show version information.",
     )
 
@@ -364,7 +364,7 @@ def pretty_size(size, real=True):
     for suffix in suffixes[multiple]:
         size /= multiple
         if size < multiple:
-            return '{0:.1f} {1}'.format(size, suffix)
+            return '{size:.1f} {suffix}'.format(size=size, suffix=suffix)
 
 if __name__ == '__main__':
     setproctitle(sys.argv[0])
@@ -377,9 +377,9 @@ if __name__ == '__main__':
     print("NZB Parsing Results")
     print("===================")
     print("Totals")
-    print("\tFiles: %s".format(results["totalFiles"]))
-    print("\tArticles: %s".format(results["totalArticles"]))
-    print("\tArticle Size: %s".format(pretty_size(results["totalBytes"])))
+    print("\tFiles: {}".format(results["totalFiles"]))
+    print("\tArticles: {}".format(results["totalArticles"]))
+    print("\tArticle Size: {}".format(pretty_size(results["totalBytes"])))
     print("")
 
     print("Be patient, this might take a while :)")
@@ -390,8 +390,8 @@ if __name__ == '__main__':
     print("NZB Checking Results")
     print("====================")
     print("Totals")
-    print("\tMissing Articles: %s".format(nzbhandler.missing))
-    print("\tCompletion: %.2f%%".format((100 - (nzbhandler.missing /
+    print("\tMissing Articles: {}".format(nzbhandler.missing))
+    print("\tCompletion: {:.2f}".format((100 - (nzbhandler.missing /
                                                 float(nzbhandler.totalArticles)
                                                 * 100))))
     print("")
