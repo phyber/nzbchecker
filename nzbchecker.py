@@ -82,7 +82,7 @@ class async_chat_ssl(asynchat.async_chat):
             print(data)
         asynchat.async_chat.push(self, "{data}{terminator}".format(
             data=data,
-            terminator=asynchat.async_chat.get_terminator()
+            terminator=NNTP_TERMINATOR
         ))
 
 
